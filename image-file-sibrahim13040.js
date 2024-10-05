@@ -51,6 +51,7 @@ function onLoadEnd(){
     let tgaPixelDepth = view.getUint8(4);
     let tgaDescriptor = view.getUint8(5);
     let tgaApha = tgaDescriptor % 16;
+    
 
     //resize canvas with tga resolution
     canvas.width = tgaWidth;
@@ -63,15 +64,27 @@ function onLoadEnd(){
 
     //getting image data
     view = new DataView(fileReader.result, 18 + tgaIDLength +tgaColorMapType);
-
+    
     for(let j =0; j<tgaHeight; j++){
         for(let i=0; i<tgaWidth; i++){
-            let icanvas = (j * tgaWidth + i) * 4;
-            let ifile = (j * tgaWidth +i) * (tgaPixelDepth/8);
+            let icanvas = (j * tgaWidth + (tgaWidth-i+1)) * 4; //symmetry around y-axis
+            let ifile = ((tgaWidth * tgaHeight) -(j * tgaWidth + i)) * (tgaPixelDepth/8); // symmetry around the origin
 
             switch(tgaPixelDepth){
                 
                 case 16: 
+                    RGBA = view.getUint16(ifile, true);
+                    // shifting and bitwising with 11111 == 0x1F to get the desired bits
+                    red = (RGBA >> 10) & 0x1F 
+                    green = (RGBA >> 5) & 0x1F;
+                    blue = RGBA & 0x1F;
+                    alpha = 255;
+
+                    // interpolating from 5 bits to 8 bits color. 
+                    red = Math.round((red/31)*255);
+                    green = Math.round((green/31)*255);
+                    blue = Math.round((blue/31)*255);
+
                     break;
                 case 24:
                     blue = view.getUint8(ifile + 0);
@@ -80,6 +93,10 @@ function onLoadEnd(){
                     alpha = 255;
                     break;
                 case 32:
+                    alpha = view.getUint8(ifile + 3);
+                    blue = view.getUint8(ifile +2);
+                    green = view.getUint8(ifile +1);
+                    red = view.getUint8(ifile +0);
                     break;
             }
 
@@ -91,6 +108,7 @@ function onLoadEnd(){
         }
     }
 
+   
     context.putImageData(imageData, 0,0);
 }
 
@@ -101,9 +119,13 @@ function processImage(){
     const data = imageData.data;
 
     for(let i=0; i< data.length; i+=4){
-        data[i+0] = 255- data[i+0];
-        data[i+1] = 255- data[i+1];
-        data[i+2] = 255- data[i+2];
+
+        //got the algorithm from stackoverflow, on Massimiliano answer
+        //it actually increases the red and green and decease blue to get the brown and yellow effect. 
+        data[i+0] = Math.min(Math.max(Math.floor(0.393*data[i+0] + 0.769*data[i+1] + 0.189*data[i+2]), 0), 255);
+        data[i+1] = Math.min(Math.max(Math.floor(0.349*data[i+0] + 0.686*data[i+1] + 0.168*data[i+2]), 0), 255);
+        data[i+2] = Math.min(Math.max(Math.floor(0.272*data[i+0] + 0.534*data[i+1] + 0.131*data[i+2]), 0), 255);
+        
     }
 
     context.putImageData(imageData, 0 , 0);
